@@ -1,21 +1,24 @@
 #include "microshell.h"
-#include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <unistd.h>
 
 char **envp;
 
 int	count_arg(char **av)
 {
 	int i = 0;
-	int	counter = 1;
+	int	counter = 0;
 
 	while (av[i])
 	{
-		if (!strcmp(av[i], "|") || !strcmp(av[i], ";"))
+		if (strcmp(av[i], "|") && strcmp(av[i] , ";"))
+		{
+			i++;
 			counter++;
-		i++;
+			while (av[i] && strcmp(av[i], "|") && strcmp(av[i] , ";"))
+				i++;
+		}
+		else 
+			i++;
 	}
 	return (counter);
 }
@@ -77,6 +80,8 @@ t_tab	*fill_tab(char **av ,int *counter)
 		if (!strcmp(av[i], "|"))
 			next_in = 2;
 		i++;
+		while (av[i] && (!strcmp(av[i], ";") || !strcmp(av[i], "|")))
+			i++;
 		j++;
 	}
 	return (tab);
@@ -149,12 +154,17 @@ void	exec_cmd(t_tab *tab, int counter)
 	tmp_in = dup(0);
 	while (i < counter)
 	{
+		if (tab[i].in == 0)
+			while (wait(NULL) != -1);
 		if (!strcmp(tab[i].args[0], "cd"))
 			check_cd(tab[i]);
 		else
 		{
-			pipe(fd);
+			if (pipe(fd))
+				exit(1);
 			pid = fork();
+			if (pid == -1)
+				exit(1);
 			if (pid == 0)
 				exec_allcmd(tab[i], fd, &tmp_in);
 			close(fd[1]);
@@ -164,30 +174,47 @@ void	exec_cmd(t_tab *tab, int counter)
 		}
 		i++;
 	}
+	close(tmp_in);
 	while (wait(NULL) != -1);
 }
 
+void	free_all(t_tab *tab, int counter)
+{
+	int i = 0;
+
+	while (i < counter)
+		free(tab[i++].args);
+	
+	free(tab);
+}
+
+char	**skip(char **av)
+{
+	int i = 0;
+
+	while (av[i])
+	{
+		if (!strcmp(av[i], ";") || !strcmp(av[i], "|"))
+			i++;
+		else 
+		break ;
+	}
+	if (!av[i])
+		exit (1);
+	return (av + i);
+}
 
 int	main(int ac, char **av, char **env)
 {
 	t_tab	*tab;
 	int		counter;
 	
+	if (ac == 1)
+		return 0;
+	av = skip(av + 1);
 	envp = env;
-	tab = fill_tab(av + 1, &counter);
-		// printf ("in : %d  out : %d\t", tab[0].in, tab[0].out);
+	tab = fill_tab(av, &counter);
 
 	exec_cmd(tab, counter);	
-
-	// int i = 0;
-	//
-	// while (i < counter)
-	// {
-	// 	int j =  -1;
-	// 	printf ("in : %d  out : %d\t", tab[i].in, tab[i].out);
-	// 	while (tab[i].args[++j])
-	// 		printf ("%s\t",tab[i].args[j]);
-	// 	printf("\n");
-	// 	i++;
-	// }
+	free_all(tab, counter);
 }
