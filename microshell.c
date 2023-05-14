@@ -122,11 +122,14 @@ void	check_cd(t_tab tab)
 	}
 }
 
-void	exec_allcmd(t_tab tab, int *fd)
+void	exec_allcmd(t_tab tab, int *fd, int *tmp_in)
 {
 	close(fd[0]);
 	if (tab.out == 2)
 		dup2(fd[1], 1);
+	if (tab.in == 2)
+		dup2(*tmp_in ,0);
+	close(*tmp_in);
 	close(fd[1]);
 	execve(tab.args[0], tab.args, envp);
 	write(2, "error: cannot execute ", 22);
@@ -141,7 +144,9 @@ void	exec_cmd(t_tab *tab, int counter)
 	int i = 0;
 	int	pid;
 	int	fd[2];
+	int	tmp_in;
 
+	tmp_in = dup(0);
 	while (i < counter)
 	{
 		if (!strcmp(tab[i].args[0], "cd"))
@@ -151,14 +156,15 @@ void	exec_cmd(t_tab *tab, int counter)
 			pipe(fd);
 			pid = fork();
 			if (pid == 0)
-				exec_allcmd(tab[i], fd);
+				exec_allcmd(tab[i], fd, &tmp_in);
 			close(fd[1]);
 			if (tab[i].out == 2)
-				dup2(fd[0], 0);
+				dup2(fd[0], tmp_in);
 			close(fd[0]);
 		}
 		i++;
 	}
+	while (wait(NULL) != -1);
 }
 
 
@@ -169,6 +175,8 @@ int	main(int ac, char **av, char **env)
 	
 	envp = env;
 	tab = fill_tab(av + 1, &counter);
+		// printf ("in : %d  out : %d\t", tab[0].in, tab[0].out);
+
 	exec_cmd(tab, counter);	
 
 	// int i = 0;
